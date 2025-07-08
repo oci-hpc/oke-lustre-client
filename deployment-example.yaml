@@ -1,0 +1,45 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lustre-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: lustre-pv
+  resources:
+    requests:
+      storage:  31Ti
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-deployment
+spec:
+  selector:
+    matchLabels:
+      app: sample-deployment
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: sample-deployment
+    spec:
+      containers:
+      - args:
+        - -c
+        - while true; do echo $(date -u) >> /lustre/data/out.txt; sleep 60; done
+        command:
+        - /bin/bash
+        image: ubuntu:latest
+        imagePullPolicy: Always
+        name: sample-deployment
+        volumeMounts:
+        - mountPath: /lustre/data
+          name: lustre-volume
+      restartPolicy: Always
+      volumes:
+      - name: lustre-volume
+        persistentVolumeClaim:
+          claimName: lustre-pvc
