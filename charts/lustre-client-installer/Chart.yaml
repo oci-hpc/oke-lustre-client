@@ -1,0 +1,17 @@
+apiVersion: v2
+name: lustre-client-installer
+description: A Helm chart for deploying a Lustre client installer DaemonSet.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - lustre
+  - client
+  - installer
+  - daemonset
+home: https://github.com/oci-hpc/oke-lustre-client
+sources:
+  - https://github.com/oci-hpc/oke-lustre-client
+maintainers:
+  - name: Andrei Ilas
+    email: andrei.ilas@oracle.com

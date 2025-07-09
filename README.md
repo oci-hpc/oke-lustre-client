@@ -22,15 +22,33 @@ This repository documents the steps required to setup Lustre Client on Oracle Ku
     ```bash
     docker push <your-docker-repo>/ubuntu-curl-jq:latest
     ```
+### Helm Installation
 
-### Preparing the DaemonSet manifest
+### Manual Installation
+
+1. **Enable the helm repo**
+
+    ```bash
+    helm repo add oke-lustre-client https://oci-hpc.github.io/oke-lustre-client/
+    helm repo update oke-lustre-client
+    ```
+2. ** `values.yaml`**
+
+3. Install the lustre client using the helm chart
+
+    ```bash
+    helm upgrade --install lustre-client-installer oke-lustre-client/lustre-client-installer \
+    --set daemonset.initContainer.image=<your-docker-repo>/ubuntu-curl-jq:latest
+    ```
+    
+#### Preparing the DaemonSet manifest
 
 1. **Update the `daemonset.yaml` file**
 
     Update the following values in the `daemonset.yaml` file for your environment:
     - `image`: The Docker image you created in the previous step. (line 214)
 
-### Installing the lustre client
+#### Installing the lustre client
 
 1. **Apply the daemonset manifest**
 

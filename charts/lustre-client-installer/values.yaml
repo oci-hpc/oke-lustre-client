@@ -1,0 +1,52 @@
+# Default values for lustre-client-installer.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Namespace where the ServiceAccount, ConfigMap, and DaemonSet will be deployed.
+# ClusterRole and ClusterRoleBinding are cluster-scoped.
+namespace: kube-system
+
+# RBAC configuration
+rbac:
+  create: true # Whether to create RBAC resources (ClusterRole, ClusterRoleBinding, serviceAccount)
+
+# DaemonSet configuration
+daemonset:
+  serviceAccountName: "lustre-client-installer-sa" #Required when rbac.create is false.
+  name: "lustre-client-installer" # Base name for the DaemonSet and its related resources
+  
+  # Image for the init container that runs the setup scripts
+  initContainer:
+    image: "fra.ocir.io/orasenatdpltintegration03/test:ubuntu-image"
+    pullPolicy: IfNotPresent
+
+  # Image for the main container (typically a pause container)
+  pauseContainer:
+    image: "registry.k8s.io/pause:3.3"
+    pullPolicy: IfNotPresent
+
+  # Node Labeling configuration after successful installation
+  nodeLabel:
+    enabled: true # Whether to patch the node with a label
+    key: "oci.oraclecloud.com/lustre-client-configured"
+    value: "true"
+
+  lustreClientURLs:
+    ubuntu: https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/_2UYvgPun0hQqMMNA0COppbWF7u5TUlHOJhJ7K-5kB7QZMoOGYc3IVPTdNHttXnm/n/fsssolutions/b/rclone-1/o/ubuntu-lustre-client/
+
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/arch
+            operator: In
+            values:
+            - amd64
+
+  tolerations: [] 
+    # - key: "node-role.kubernetes.io/master"
+    #   operator: "Exists"
+    #   effect: "NoSchedule"
+    # - key: "CriticalAddonsOnly"
+    #   operator: "Exists"
