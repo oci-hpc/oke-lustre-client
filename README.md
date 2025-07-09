@@ -24,8 +24,6 @@ This repository documents the steps required to setup Lustre Client on Oracle Ku
     ```
 ### Helm Installation
 
-### Manual Installation
-
 1. **Enable the helm repo**
 
     ```bash
@@ -40,6 +38,8 @@ This repository documents the steps required to setup Lustre Client on Oracle Ku
     helm upgrade --install lustre-client-installer oke-lustre-client/lustre-client-installer \
     --set daemonset.initContainer.image=<your-docker-repo>/ubuntu-curl-jq:latest
     ```
+
+### Manual Installation
 
 #### Preparing the DaemonSet manifest
 
