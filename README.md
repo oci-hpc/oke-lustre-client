@@ -40,7 +40,7 @@ This repository documents the steps required to setup Lustre Client on Oracle Ku
     helm upgrade --install lustre-client-installer oke-lustre-client/lustre-client-installer \
     --set daemonset.initContainer.image=<your-docker-repo>/ubuntu-curl-jq:latest
     ```
-    
+
 #### Preparing the DaemonSet manifest
 
 1. **Update the `daemonset.yaml` file**
@@ -61,7 +61,7 @@ This repository documents the steps required to setup Lustre Client on Oracle Ku
     To check the pod logs, run the command:
 
     ```bash
-    kubectl logs -n kube-system -l job=lustre-installer --all-containers --prefix=true --timestamps
+    kubectl logs -n kube-system -l job=lustre-client-installer --all-containers --prefix=true --timestamps
     ```
 
 ## Verify installation

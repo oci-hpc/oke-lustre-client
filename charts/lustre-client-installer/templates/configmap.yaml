@@ -32,7 +32,7 @@ data:
 
     if [ -f /etc/os-release ]; then
       . /etc/os-release
-      if [ "$ID" != "ubuntu" ]; then
+      if [ "$ID" != "ubuntu" ] || [ "$UBUNTU_CODENAME" != "jammy" ]; then
         log "Unsupported OS ${ID}."
         exit 1
       fi
@@ -41,9 +41,9 @@ data:
       exit 1
     fi
 
-    LUSTRE_CONFIG_FILE="/etc/modules-load.d/lustre.conf"
-    if [[ -s "${LUSTRE_CONFIG_FILE}" ]]; then
-      log "Lustre config file exists and is not empty."
+    LNET_CONFIG_FILE="/etc/modprobe.d/lnet.conf"
+    if [[ -f "${LNET_CONFIG_FILE}" ]]; then
+      log "Lnet config file exists."
       exit 0
     fi
 
@@ -124,13 +124,11 @@ data:
 
     # Try to load kernel module, to verify kernel module
     if ! (modprobe lnet) then
-        log "Failed to load kernel module"
+        echo "Failed to load kernel module"
         exit 1
     else
-        default_interface=$(ip route | grep default | awk '{print $5}' | uniq)
-        touch "${LUSTRE_CONFIG_FILE}"
-        grep -qxF "options lnet networks=tcp($default_interface)" "${LUSTRE_CONFIG_FILE}" || echo "options lnet networks=tcp($default_interface)" >> /etc/modprobe.d/lustre.conf
-        log "Module load test successful. Lustre client ready"
+        touch "${LNET_CONFIG_FILE}"
+        echo "Module load test successful. Lustre client ready"
     fi
     exit 0
   setup.sh: |
@@ -155,12 +153,13 @@ data:
     {{- if (default false .Values.daemonset.nodeLabel.enabled) }}
     LUSTRE_INSTALLATION_STATUS=$?
     if [ "${LUSTRE_INSTALLATION_STATUS}" -eq 0 ]; then
-      curl -X PATCH \
+      curl -s -X PATCH \
         -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
         -H "Content-Type: application/merge-patch+json" \
         --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
         https://kubernetes.default.svc/api/v1/nodes/$NODE_NAME \
-        -d '{"metadata": {"labels": {"{{ .Values.daemonset.nodeLabel.key }}": "{{ .Values.daemonset.nodeLabel.value }}"}}}'
+        -d '{"metadata": {"labels": {"{{ .Values.daemonset.nodeLabel.key }}": "{{ .Values.daemonset.nodeLabel.value }}"}}}'  > /dev/null
+      echo "Node successfuly labeled."
     fi
     {{- end }}
     echo "Waiting for 5 seconds..."

@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: lustre-installer-role
+  name: lustre-client-installer-role
 rules:
 - apiGroups: [""]
   resources: ["nodes"]
@@ -11,7 +11,7 @@ rules:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: lustre-installer-sa
+  name: lustre-client-installer-sa
   namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -21,10 +21,10 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: lustre-installer-role
+  name: lustre-client-installer-role
 subjects:
 - kind: ServiceAccount
-  name: lustre-installer-sa
+  name: lustre-client-installer-sa
   namespace: kube-system
 ---
 apiVersion: v1
@@ -59,7 +59,7 @@ data:
 
     if [ -f /etc/os-release ]; then
       . /etc/os-release
-      if [ "$ID" != "ubuntu" ]; then
+      if [ "$ID" != "ubuntu" ] || [ "$UBUNTU_CODENAME" != "jammy" ]; then
         log "Unsupported OS ${ID}."
         exit 1
       fi
@@ -68,9 +68,9 @@ data:
       exit 1
     fi
 
-    LUSTRE_CONFIG_FILE="/etc/modules-load.d/lustre.conf"
-    if [[ -s "${LUSTRE_CONFIG_FILE}" ]]; then
-      log "Lustre config file exists and is not empty."
+    LNET_CONFIG_FILE="/etc/modprobe.d/lnet.conf"
+    if [[ -f "${LNET_CONFIG_FILE}" ]]; then
+      log "Lnet config file exists."
       exit 0
     fi
 
@@ -154,9 +154,7 @@ data:
         log "Failed to load kernel module"
         exit 1
     else
-        default_interface=$(ip route | grep default | awk '{print $5}' | uniq)
-        touch "${LUSTRE_CONFIG_FILE}"
-        grep -qxF "options lnet networks=tcp($default_interface)" "${LUSTRE_CONFIG_FILE}" || echo "options lnet networks=tcp($default_interface)" >> /etc/modprobe.d/lustre.conf
+        touch "${LNET_CONFIG_FILE}"
         log "Module load test successful. Lustre client ready"
     fi
     exit 0
@@ -196,18 +194,18 @@ data:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: lustre-installer
+  name: lustre-client-installer
   namespace: kube-system
 spec:
   selector:
     matchLabels:
-      job: lustre-installer
+      job: lustre-client-installer
   template:
     metadata:
       labels:
-        job: lustre-installer
+        job: lustre-client-installer
     spec:
-      serviceAccountName: lustre-installer-sa
+      serviceAccountName: lustre-client-installer-sa
       hostPID: true
       restartPolicy: Always
       initContainers:
@@ -217,7 +215,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        name: lustre-installer
+        name: lustre-client-installer
         securityContext:
           privileged: true
         args:

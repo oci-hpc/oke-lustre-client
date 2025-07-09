@@ -15,16 +15,16 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sample-deployment
+  name: sample-lustre-deployment
 spec:
   selector:
     matchLabels:
-      app: sample-deployment
+      app: sample-lustre-deployment
   replicas: 1
   template:
     metadata:
       labels:
-        app: sample-deployment
+        app: sample-lustre-deployment
     spec:
       containers:
       - args:
@@ -34,7 +34,7 @@ spec:
         - /bin/bash
         image: ubuntu:latest
         imagePullPolicy: Always
-        name: sample-deployment
+        name: sample-lustre-deployment
         volumeMounts:
         - mountPath: /lustre/data
           name: lustre-volume
