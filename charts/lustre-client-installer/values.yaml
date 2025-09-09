@@ -44,9 +44,9 @@ daemonset:
             values:
             - amd64
 
-  tolerations: [] 
-    # - key: "node-role.kubernetes.io/master"
-    #   operator: "Exists"
-    #   effect: "NoSchedule"
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
     # - key: "CriticalAddonsOnly"
     #   operator: "Exists"

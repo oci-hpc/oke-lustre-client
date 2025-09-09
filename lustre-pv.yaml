@@ -12,7 +12,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   csi:
     driver: lustre.csi.oraclecloud.com
-    volumeHandle: "10.30.1.250@tcp:/lustrefs"
+    volumeHandle: "10.30.1.192@tcp:/lustrefs"
     fsType: lustre
     volumeAttributes:
       setupLnet: "true"
