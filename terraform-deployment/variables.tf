@@ -1,3 +1,7 @@
+variable region {
+    default = "eu-frankfurt-1"
+}
+
 variable kubernetes_version {
     default = "v1.32.1"
 }

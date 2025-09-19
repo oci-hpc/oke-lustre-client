@@ -6,123 +6,184 @@ metadata:
   labels:
     {{- include "lustre-client-installer.labels" . | nindent 4 }}
 data:
-  wait.sh: |
-    #!/bin/bash
-    while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do sleep 1; done
   lustre-client-install.sh: |
     #!/bin/bash
+    set -euo pipefail
 
-    LUSTRE_VERSION=2.15.5
-    LUSTRE_PACKAGE_VERSION="${LUSTRE_VERSION}-oci0-12-gd3b2033-1"
-    #LUSTRE_PACKAGES_OBJECT_STORE_URL=https://objectstorage.us-saltlake-2.oraclecloud.com/p/fkbElfBAoUyHr_F1RqkSMc3dVQGMVs7nZNltqj8oewsSWeYefgAjFiDJcWM9WM4i/n/axehoqpdxwz4/b/packages/o/deb/${LUSTRE_VERSION}-12_dkms/client_base/
-    #LUSTRE_PACKAGES_OBJECT_STORE_URL=https://objectstorage.us-ashburn-1.oraclecloud.com/p/wM0DapEKogbt5Yqh2AResKhf_dJdVyqOrToPfoxE4vjWc1j8vis4DxUjyOEt9lkA/n/axehoqpdxwz4/b/packages-mirror/o/deb/${LUSTRE_VERSION}-12_dkms/client_base/
-    LUSTRE_PACKAGES_OBJECT_STORE_URL={{ .Values.daemonset.lustreClientURLs.ubuntu }}
-    LUSTRE_PKG_DIR="/tmp/lustre-${LUSTRE_PACKAGE_VERSION}-packages"
-
-    pkgs=(
-        "lustre-client-modules-dkms_${LUSTRE_PACKAGE_VERSION}_amd64.deb"
-        "lustre-client-utils_${LUSTRE_PACKAGE_VERSION}_amd64.deb"
-    )
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+    else
+        echo "Cannot detect OS: /etc/os-release missing"
+        exit 1
+    fi
 
     # Log function for consistent logging
     log() {
         echo "$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ") - $1"
     }
-    export SYSTEMCTL_FORCE_BUS=1
 
-    if [ -f /etc/os-release ]; then
-      . /etc/os-release
-      if [ "$ID" != "ubuntu" ] || [ "$UBUNTU_CODENAME" != "jammy" ]; then
-        log "Unsupported OS ${ID}."
-        exit 1
-      fi
-    else
-      echo "/etc/os-release not found. Cannot determine OS."
-      exit 1
-    fi
-
-    LNET_CONFIG_FILE="/etc/modprobe.d/lnet.conf"
-    if [[ -f "${LNET_CONFIG_FILE}" ]]; then
-      log "Lnet config file exists."
-      exit 0
-    fi
-
-    # Remove Lustre modules, wait for some time for the modules to be removed
-    #umount /mount/FSZETA0 2>/dev/null|| true
-    retry=0
-    while which lustre_rmmod  && ! lustre_rmmod && [ $retry -lt 10 ]
-    do
-        log "Failed to unload Lustre modules, retry=$retry"
-        sleep 30
-        retry=$((retry+1))
-    done
-
-    if [ $retry -eq 10 ]; then
-        log "Failed to unload Lustre modules after 5 minutes, this node likely require a reboot"
-        exit 1
-    fi
-    log "Successfully unloaded Lustre modules, proceeding with Lustre client installation/upgrade"
-
-    log "Removing existing lustre packages"
-    apt-get remove --purge -y lustre-client-modules-dkms || true
-    apt-get remove --purge -y lustre-client-utils || true
-
-    #pre requisite for building lustre packages
-    log "Installing linux headers and images for the running kernel to make sure dependencies are met"
-    dpkg --configure -a
-    apt-get update --yes
-    apt-get install -y --no-upgrade linux-headers-$(uname -r)
-    apt-get install -y --no-upgrade linux-image-$(uname -r)
-    apt-get install -y --no-upgrade linux-base
-
-    #Make sure all the above pre-requisites are installed. Otherwise no point in continuing
-
-    dpkg --list | grep "linux-headers-$(uname -r) " || ( log "linux-headers-$(uname -r) is not installed. Exiting" && exit 1 )
-    dpkg --list | grep "linux-image-$(uname -r) " || (  log "linux-image-$(uname -r) is not installed. Exiting" && exit 1 )
-    dpkg --list | grep "linux-base " || ( log "linux-base is not installed. Exiting" && exit 1 )
-
-    # Array to hold packages that are not installed
-    not_installed_pkgs=()
-    for package in "${pkgs[@]}"; do
-        log "Checking $package installation on system."
-        package_to_query="${package//_${LUSTRE_PACKAGE_VERSION}_amd64.deb/}"
-        if dpkg -s "$package_to_query" | grep "install ok installed" &> /dev/null; then
-            log "Package $package is already installed."
-        else
-            log "Package $package is not currently installed."
-            not_installed_pkgs+=("$package")
-        fi
-    done
-
-    # If there are any packages not installed
-    if [ ${#not_installed_pkgs[@]} -ne 0 ]; then
-        mkdir -p $LUSTRE_PKG_DIR
-        cd $LUSTRE_PKG_DIR
-        pwd
-        log "Downloading and installing missing packages..."
-        if ! printf '%s\n' "${not_installed_pkgs[@]}" | xargs -I{} -P8 curl -O "${LUSTRE_PACKAGES_OBJECT_STORE_URL}{}"; then
-            log "Failed to download one or more packages."
-            exit 1
-        fi
-
-        # Install all dependencies prior
-        log "Installing depencies seperately to avoid auto install of new kernel versions"
-        for pkg in $(ls *.deb)
+    remove_lustre_modules() {
+        # Remove Lustre modules, wait for some time for the modules to be removed
+        retry=0
+        while which lustre_rmmod && ! lustre_rmmod && [ $retry -lt 10 ]
         do
-            apt-get install -y $(dpkg -I  $pkg | grep "^ Depends: " | sed -E -e 's/,/ /g' -e 's/(linux-base|linux-image-oracle|linux-image-oracle-amd64|linux-image-oracle-arm64|linux-headers-oracle|linux-headers-amd64)//g' -e 's/[,\|]//g'  -e 's/ +/ /g' | cut -f2 -d:)
+            log "Failed to unload Lustre modules, retry=$retry"
+            sleep 30
+            retry=$((retry+1))
         done
 
-        log "Now installing Lustre packages alone without dependencies"
-        if ! (apt-get update --yes && dpkg --ignore-depends=linux-image-oracle,linux-headers-oracle,linux-headers-amd64,inux-image-oracle-amd64,linux-image-oracle-arm64,linux-headers-oracle,linux-headers-amd64 -i ./*.deb && rm -f ./*.deb) then
-            log "Failed to install one or more packages."
+        if [ $retry -eq 10 ]; then
+            log "Failed to unload Lustre modules after 5 minutes, this node likely require a reboot"
             exit 1
         fi
-        log "Packages installed successfully."
-    else
-        log "All required packages are already installed."
-    fi
 
-    # Try to load kernel module, to verify kernel module
+        log "Successfully unloaded Lustre modules, proceeding with Lustre client installation/upgrade"
+    }
+    
+    export SYSTEMCTL_FORCE_BUS=1
+
+    LNET_CONFIG_FILE="/etc/modprobe.d/lnet.conf"
+
+    case "$ID" in
+        ubuntu)
+            log "Detected Ubuntu ..."
+            if [ "$UBUNTU_CODENAME" != "jammy" ]; then
+                log "Unsupported OS Version ${VERSION}."
+                exit 1
+            fi
+
+            if [[ -f "${LNET_CONFIG_FILE}" ]]; then
+              log "Lnet config file exists."
+              exit 0
+            fi
+
+            LUSTRE_VERSION=2.15.5
+            LUSTRE_PACKAGE_VERSION="${LUSTRE_VERSION}-oci0-12-gd3b2033-1"
+            LUSTRE_PACKAGES_OBJECT_STORE_URL={{ .Values.daemonset.lustreClientURLs.ubuntu }}
+            LUSTRE_PKG_DIR="/tmp/lustre-${LUSTRE_PACKAGE_VERSION}-packages"
+
+            pkgs=(
+                "lustre-client-modules-dkms_${LUSTRE_PACKAGE_VERSION}_amd64.deb"
+                "lustre-client-utils_${LUSTRE_PACKAGE_VERSION}_amd64.deb"
+            )
+
+            remove_lustre_modules
+
+            log "Removing existing lustre packages"
+            apt-get remove --purge -y lustre-client-modules-dkms || true
+            apt-get remove --purge -y lustre-client-utils || true
+
+            #pre requisite for building lustre packages
+            log "Installing linux headers and images for the running kernel to make sure dependencies are met"
+            dpkg --configure -a
+            add-apt-repository restricted
+            apt-get update --yes
+            
+            #Make sure all the above pre-requisites are installed. Otherwise no point in continuing
+            
+            dpkg --list | grep "linux-headers-$(uname -r) " || ( apt-get install -y --no-upgrade linux-headers-$(uname -r) || ( log "linux-headers-$(uname -r) is not installed. Exiting" && exit 1 ) )
+            dpkg --list | grep "linux-image-$(uname -r) " || ( apt-get install -y --no-upgrade linux-image-$(uname -r) || ( log "linux-image-$(uname -r) is not installed. Exiting" && exit 1 ) )
+            dpkg --list | grep "linux-base " || ( apt-get install -y --no-upgrade linux-base || ( log "linux-base is not installed. Exiting" && exit 1 ) )
+
+            # Array to hold packages that are not installed
+            not_installed_pkgs=()
+            for package in "${pkgs[@]}"; do
+                log "Checking $package installation on system."
+                package_to_query="${package//_${LUSTRE_PACKAGE_VERSION}_amd64.deb/}"
+                if dpkg -s "$package_to_query" | grep "install ok installed" &> /dev/null; then
+                    log "Package $package is already installed."
+                else
+                    log "Package $package is not currently installed."
+                    not_installed_pkgs+=("$package")
+                fi
+            done
+
+            # If there are any packages not installed
+            if [ ${#not_installed_pkgs[@]} -ne 0 ]; then
+                mkdir -p "$LUSTRE_PKG_DIR"
+                cd "$LUSTRE_PKG_DIR"
+                pwd
+                log "Downloading and installing missing packages..."
+                if ! printf '%s\n' "${not_installed_pkgs[@]}" | xargs -I{} -P8 curl -O "${LUSTRE_PACKAGES_OBJECT_STORE_URL}{}"; then
+                    log "Failed to download one or more packages."
+                    exit 1
+                fi
+
+                # Install all dependencies prior
+                log "Installing depencies seperately to avoid auto install of new kernel versions"
+                for pkg in $(ls *.deb)
+                do
+                    apt-get install -y $(dpkg -I  $pkg | grep "^ Depends: " | sed -E -e 's/,/ /g' -e 's/(linux-base|linux-image-oracle|linux-image-oracle-amd64|linux-image-oracle-arm64|linux-headers-oracle|linux-headers-amd64)//g' -e 's/[,\|]//g'  -e 's/ +/ /g' | cut -f2 -d:)
+                done
+
+                log "Now installing Lustre packages alone without dependencies"
+                if ! (apt-get update --yes && dpkg --ignore-depends=linux-image-oracle,linux-headers-oracle,linux-headers-amd64,inux-image-oracle-amd64,linux-image-oracle-arm64,linux-headers-oracle,linux-headers-amd64 -i ./*.deb && rm -f ./*.deb) then
+                    log "Failed to install one or more packages."
+                    exit 1
+                fi
+                log "Packages installed successfully."
+            else
+                log "All required packages are already installed."
+            fi
+            ;;
+        ol)
+            log "Detected Oracle Linux ..."
+
+            if [ "$PLATFORM_ID" != "platform:el8" ]; then
+                log "Unsupported OS Version ${VERSION}."
+                exit 1
+            fi
+
+            CURRENT_KERNEL_VERSION="$(uname -r)"
+            if [[ "${CURRENT_KERNEL_VERSION}" =~ uek ]]; then
+                log "RH Compatible Kernel Required. More details here: https://blogs.oracle.com/linux/post/changing-the-default-kernel-in-oracle-linux-its-as-simple-as-1-2-3"
+                exit 1
+            fi
+
+            if [[ -f "${LNET_CONFIG_FILE}" ]]; then
+              log "Lnet config file exists."
+              exit 0
+            fi
+
+            LUSTRE_PACKAGES_OBJECT_STORE_URL={{ .Values.daemonset.lustreClientURLs.ol }}
+            LUSTRE_PKG_DIR="/tmp/lustre-packages"
+        
+            remove_lustre_modules
+
+            log "Removing existing lustre packages"
+            dnf remove -y lustre-client lustre-client-dkms || true
+            
+            echo "Downloading Lustre client RPMs..."
+            
+            if [[ -f "/tmp/OL8-Lustre-client-dkms.tgz" ]]; then
+              rm -rf /tmp/OL8-Lustre-client-dkms.tgz
+            fi
+            
+            if [[ -d "$LUSTRE_PKG_DIR" ]]; then
+              rm -rf "$LUSTRE_PKG_DIR"
+            fi
+            
+            mkdir -p "$LUSTRE_PKG_DIR"
+            wget -O /tmp/OL8-Lustre-client-dkms.tgz ${LUSTRE_PACKAGES_OBJECT_STORE_URL}
+            
+            tar -xvzf /tmp/OL8-Lustre-client-dkms.tgz -C "$LUSTRE_PKG_DIR"
+            
+            rpm_files=()
+            mapfile -t rpm_files < <(find "$LUSTRE_PKG_DIR" -type f -name "*.rpm" -not -path "*/.*")
+
+            if ! (dnf install -y --enablerepo ol8_developer_EPEL --enablerepo ol8_codeready_builder --nogpgcheck "${rpm_files[@]}" ) then
+                log "Failed to install one or more packages."
+                exit 1
+            fi
+
+            log "Packages installed successfully."
+            ;;
+        *)
+            echo "Unsupported OS: $ID"
+            exit 1
+            ;;
+    esac
+    # Try to load the lnet kernel module
     if ! (modprobe lnet) then
         echo "Failed to load kernel module"
         exit 1
@@ -137,29 +198,26 @@ data:
     # Copy installation script to host
     cp /tmp/lustre-client-install.sh /host
 
-    # Copy wait script to the host 
-    cp /tmp/wait.sh /host
-
-    # Ensure the scripts are executable
-    /usr/bin/nsenter -m/proc/1/ns/mnt -- chmod u+x /tmp/lustre/wait.sh
+    # Ensure the scripts is executable
     /usr/bin/nsenter -m/proc/1/ns/mnt -- chmod u+x /tmp/lustre/lustre-client-install.sh
-
-    # Wait for the Node updates to complete
-    /usr/bin/nsenter -m/proc/1/ns/mnt /tmp/lustre/wait.sh
 
     # Run the Lustre Setup script
     /usr/bin/nsenter -m/proc/1/ns/mnt -n/proc/1/ns/net /tmp/lustre/lustre-client-install.sh
 
     {{- if (default false .Values.daemonset.nodeLabel.enabled) }}
     LUSTRE_INSTALLATION_STATUS=$?
+    echo "Execution status: ${LUSTRE_INSTALLATION_STATUS}"
     if [ "${LUSTRE_INSTALLATION_STATUS}" -eq 0 ]; then
-      curl -s -X PATCH \
-        -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
-        -H "Content-Type: application/merge-patch+json" \
-        --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
-        https://kubernetes.default.svc/api/v1/nodes/$NODE_NAME \
-        -d '{"metadata": {"labels": {"{{ .Values.daemonset.nodeLabel.key }}": "{{ .Values.daemonset.nodeLabel.value }}"}}}'  > /dev/null
-      echo "Node successfuly labeled."
+        if (curl -X PATCH \
+            -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+            -H "Content-Type: application/merge-patch+json" \
+            --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+            https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}/api/v1/nodes/$NODE_NAME \
+            -d '{"metadata": {"labels": {"{{ .Values.daemonset.nodeLabel.key }}": "{{ .Values.daemonset.nodeLabel.value }}"}}}') then
+            echo "Node successfuly labeled."
+        else
+            echo "Failed to label the node."
+        fi
     fi
     {{- end }}
     echo "Waiting for 5 seconds..."

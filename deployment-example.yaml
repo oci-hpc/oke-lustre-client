@@ -26,6 +26,10 @@ spec:
       labels:
         app: sample-lustre-deployment
     spec:
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
       - args:
         - -c

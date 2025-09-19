@@ -35,7 +35,7 @@ resource "oci_containerengine_node_pool" "lustre_np" {
     }
     node_source_details {
         #Required
-        image_id = "ocid1.image.oc1.eu-frankfurt-1.aaaaaaaapo2tbf6sp2hyi3z4rij4agultcrzsazl3sfkiwif55fpi3bl4ucq"
+        image_id = var.image_ocid
         source_type = "IMAGE"
         #Optional
         boot_volume_size_in_gbs = 200
@@ -53,7 +53,7 @@ data "oci_containerengine_cluster" "test_cluster" {
 locals{
     ssh_authorized_keys = var.ssh_authorized_keys
     runcmd_bootstrap = format(
-    "curl -sL -o /var/run/oke-ubuntu-cloud-init.sh https://raw.githubusercontent.com/oracle-quickstart/oci-hpc-oke/refs/heads/main/files/oke-ubuntu-cloud-init.sh && (bash /var/run/oke-ubuntu-cloud-init.sh '%v' '%v' || echo 'Error bootstrapping OKE' >&2)",
+        "curl -sL -o /var/run/oke-ubuntu-cloud-init.sh https://raw.githubusercontent.com/oracle-quickstart/oci-hpc-oke/refs/heads/main/files/oke-ubuntu-cloud-init.sh && (bash /var/run/oke-ubuntu-cloud-init.sh '%v' '%v' || echo 'Error bootstrapping OKE' >&2)",
     var.kubernetes_version, false,
     ) 
     
