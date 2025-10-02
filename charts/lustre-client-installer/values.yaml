@@ -17,7 +17,7 @@ daemonset:
   
   # Image for the init container that runs the setup scripts
   initContainer:
-    image: "fra.ocir.io/orasenatdpltintegration03/test:ubuntu-image"
+    image: "fra.ocir.io/idxzjcdglx2s/ubuntu:curl-jq"
     pullPolicy: IfNotPresent
 
   # Image for the main container (typically a pause container)

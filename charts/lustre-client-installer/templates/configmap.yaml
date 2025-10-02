@@ -10,17 +10,17 @@ data:
     #!/bin/bash
     set -euo pipefail
 
-    if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-    else
-        echo "Cannot detect OS: /etc/os-release missing"
-        exit 1
-    fi
-
     # Log function for consistent logging
     log() {
         echo "$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ") - $1"
     }
+
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+    else
+        log "Cannot detect OS: /etc/os-release missing"
+        exit 1
+    fi
 
     remove_lustre_modules() {
         # Remove Lustre modules, wait for some time for the modules to be removed
@@ -73,14 +73,12 @@ data:
             apt-get remove --purge -y lustre-client-modules-dkms || true
             apt-get remove --purge -y lustre-client-utils || true
 
-            #pre requisite for building lustre packages
+            # Make sure all the pre-requisites are installed. Otherwise no point in continuing.
             log "Installing linux headers and images for the running kernel to make sure dependencies are met"
             dpkg --configure -a
             add-apt-repository restricted
             apt-get update --yes
-            
-            #Make sure all the above pre-requisites are installed. Otherwise no point in continuing
-            
+
             dpkg --list | grep "linux-headers-$(uname -r) " || ( apt-get install -y --no-upgrade linux-headers-$(uname -r) || ( log "linux-headers-$(uname -r) is not installed. Exiting" && exit 1 ) )
             dpkg --list | grep "linux-image-$(uname -r) " || ( apt-get install -y --no-upgrade linux-image-$(uname -r) || ( log "linux-image-$(uname -r) is not installed. Exiting" && exit 1 ) )
             dpkg --list | grep "linux-base " || ( apt-get install -y --no-upgrade linux-base || ( log "linux-base is not installed. Exiting" && exit 1 ) )
@@ -153,7 +151,11 @@ data:
             log "Removing existing lustre packages"
             dnf remove -y lustre-client lustre-client-dkms || true
             
-            echo "Downloading Lustre client RPMs..."
+            # Make sure all the pre-requisites are installed. Otherwise no point in continuing.
+
+            rpm -q kernel-devel | grep "kernel-devel-$(uname -r)" || ( dnf install -y kernel-devel-$(uname -r) || ( log "kernel-devel-$(uname -r) is not installed. Exiting" && exit 1 ) )
+            
+            log "Downloading Lustre client RPMs..."
             
             if [[ -f "/tmp/OL8-Lustre-client-dkms.tgz" ]]; then
               rm -rf /tmp/OL8-Lustre-client-dkms.tgz
@@ -179,17 +181,17 @@ data:
             log "Packages installed successfully."
             ;;
         *)
-            echo "Unsupported OS: $ID"
+            log "Unsupported OS: $ID"
             exit 1
             ;;
     esac
     # Try to load the lnet kernel module
-    if ! (modprobe lnet) then
-        echo "Failed to load kernel module"
+    if ! (modprobe lnet && lnetctl help) then
+        log "Failed to load kernel module"
         exit 1
     else
         touch "${LNET_CONFIG_FILE}"
-        echo "Module load test successful. Lustre client ready"
+        log "Module load test successful. Lustre client ready"
     fi
     exit 0
   setup.sh: |
