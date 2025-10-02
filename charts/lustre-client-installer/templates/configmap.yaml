@@ -139,8 +139,15 @@ data:
             fi
 
             if [[ -f "${LNET_CONFIG_FILE}" ]]; then
-              log "Lnet config file exists."
-              exit 0
+              log "Lnet config file exists. Checking installed Lustre version..."
+              INSTALLED_VERSION=$(rpm -q lustre-client | grep -oP 'lustre-client-\K[0-9.]+' || echo "not_installed")
+              TARGET_VERSION="2.15.5"  # Hardcoded to match the tarball version
+                if [[ "$INSTALLED_VERSION" == "$TARGET_VERSION" ]]; then
+                 log "Correct Lustre version ($TARGET_VERSION) already installed."
+                  exit 0 
+                  else
+                   log "Installed Lustre version ($INSTALLED_VERSION) differs from target ($TARGET_VERSION). Proceeding with installation/downgrade..."
+                fi
             fi
 
             LUSTRE_PACKAGES_OBJECT_STORE_URL={{ .Values.daemonset.lustreClientURLs.ol }}
@@ -173,7 +180,7 @@ data:
             rpm_files=()
             mapfile -t rpm_files < <(find "$LUSTRE_PKG_DIR" -type f -name "*.rpm" -not -path "*/.*")
 
-            if ! (dnf install -y --enablerepo ol8_developer_EPEL --enablerepo ol8_codeready_builder --nogpgcheck "${rpm_files[@]}" ) then
+            if ! (dnf install -y --allow-downgrade --enablerepo ol8_developer_EPEL --enablerepo ol8_codeready_builder --nogpgcheck "${rpm_files[@]}" ) then
                 log "Failed to install one or more packages."
                 exit 1
             fi
