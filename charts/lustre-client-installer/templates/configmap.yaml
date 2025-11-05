@@ -22,7 +22,7 @@ data:
         exit 1
     fi
 
-    remove_lustre_modules() {
+    unload_kernel_modules() {
         # Remove Lustre modules, wait for some time for the modules to be removed
         retry=0
         while which lustre_rmmod && ! lustre_rmmod && [ $retry -lt 10 ]
@@ -67,7 +67,7 @@ data:
                 "lustre-client-utils_${LUSTRE_PACKAGE_VERSION}_amd64.deb"
             )
 
-            remove_lustre_modules
+            unload_kernel_modules
 
             log "Removing existing lustre packages"
             apt-get remove --purge -y lustre-client-modules-dkms || true
@@ -146,7 +146,7 @@ data:
             LUSTRE_PACKAGES_OBJECT_STORE_URL={{ .Values.daemonset.lustreClientURLs.ol }}
             LUSTRE_PKG_DIR="/tmp/lustre-packages"
         
-            remove_lustre_modules
+            unload_kernel_modules
 
             log "Removing existing lustre packages"
             dnf remove -y lustre-client lustre-client-dkms || true
@@ -173,7 +173,10 @@ data:
             rpm_files=()
             mapfile -t rpm_files < <(find "$LUSTRE_PKG_DIR" -type f -name "*.rpm" -not -path "*/.*")
 
-            if ! (dnf install -y --enablerepo ol8_developer_EPEL --enablerepo ol8_codeready_builder --nogpgcheck "${rpm_files[@]}" ) then
+            dnf config-manager --set-enabled ol8_codeready_builder
+            dnf install -y libmount-devel
+
+            if ! (rpm -iv --nodeps --force "${rpm_files[@]}" ) then
                 log "Failed to install one or more packages."
                 exit 1
             fi
