@@ -2,6 +2,27 @@ apiVersion: v1
 entries:
   lustre-client-installer:
   - apiVersion: v2
+    appVersion: 1.0.2
+    created: "2025-11-05T15:38:39.434832734Z"
+    description: A Helm chart for deploying a Lustre client installer DaemonSet.
+    digest: 93ee09a4cc5a1951cfec3b5bc48b637fd4e8b608afdc1a3aa46247a2dc0bc891
+    home: https://github.com/oci-hpc/oke-lustre-client
+    keywords:
+    - lustre
+    - client
+    - installer
+    - daemonset
+    maintainers:
+    - email: andrei.ilas@oracle.com
+      name: Andrei Ilas
+    name: lustre-client-installer
+    sources:
+    - https://github.com/oci-hpc/oke-lustre-client
+    type: application
+    urls:
+    - https://github.com/oci-hpc/oke-lustre-client/releases/download/lustre-client-installer-0.1.2/lustre-client-installer-0.1.2.tgz
+    version: 0.1.2
+  - apiVersion: v2
     appVersion: 1.0.1
     created: "2025-09-19T14:57:13.304494675Z"
     description: A Helm chart for deploying a Lustre client installer DaemonSet.
@@ -43,4 +64,4 @@ entries:
     urls:
     - https://github.com/oci-hpc/oke-lustre-client/releases/download/lustre-client-installer-0.1.0/lustre-client-installer-0.1.0.tgz
     version: 0.1.0
-generated: "2025-09-19T14:57:13.304508541Z"
+generated: "2025-11-05T15:38:39.434840759Z"
