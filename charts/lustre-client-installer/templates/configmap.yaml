@@ -2,7 +2,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "lustre-client-installer.fullname" . }}-cm # Using fullname for ConfigMap
-  namespace: {{ .Values.namespace }}
   labels:
     {{- include "lustre-client-installer.labels" . | nindent 4 }}
 data:
@@ -57,15 +56,8 @@ data:
               exit 0
             fi
 
-            LUSTRE_VERSION=2.15.5
-            LUSTRE_PACKAGE_VERSION="${LUSTRE_VERSION}-oci0-12-gd3b2033-1"
             LUSTRE_PACKAGES_OBJECT_STORE_URL={{ .Values.daemonset.lustreClientURLs.ubuntu }}
-            LUSTRE_PKG_DIR="/tmp/lustre-${LUSTRE_PACKAGE_VERSION}-packages"
-
-            pkgs=(
-                "lustre-client-modules-dkms_${LUSTRE_PACKAGE_VERSION}_amd64.deb"
-                "lustre-client-utils_${LUSTRE_PACKAGE_VERSION}_amd64.deb"
-            )
+            LUSTRE_PKG_DIR="/tmp/lustre-packages"
 
             unload_kernel_modules
 
@@ -83,46 +75,40 @@ data:
             dpkg --list | grep "linux-image-$(uname -r) " || ( apt-get install -y --no-upgrade linux-image-$(uname -r) || ( log "linux-image-$(uname -r) is not installed. Exiting" && exit 1 ) )
             dpkg --list | grep "linux-base " || ( apt-get install -y --no-upgrade linux-base || ( log "linux-base is not installed. Exiting" && exit 1 ) )
 
-            # Array to hold packages that are not installed
-            not_installed_pkgs=()
-            for package in "${pkgs[@]}"; do
-                log "Checking $package installation on system."
-                package_to_query="${package//_${LUSTRE_PACKAGE_VERSION}_amd64.deb/}"
-                if dpkg -s "$package_to_query" | grep "install ok installed" &> /dev/null; then
-                    log "Package $package is already installed."
-                else
-                    log "Package $package is not currently installed."
-                    not_installed_pkgs+=("$package")
-                fi
+            log "Downloading Lustre client DEBs..."
+            
+            if [[ -f "/tmp/Ubuntu-Lustre-client-dkms.tgz" ]]; then
+              rm -rf /tmp/Ubuntu-Lustre-client-dkms.tgz
+            fi
+            
+            if [[ -d "$LUSTRE_PKG_DIR" ]]; then
+              rm -rf "$LUSTRE_PKG_DIR"
+            fi
+            
+            mkdir -p "$LUSTRE_PKG_DIR"
+            wget -O /tmp/Ubuntu-Lustre-client-dkms.tgz ${LUSTRE_PACKAGES_OBJECT_STORE_URL}
+
+            tar -xvzf /tmp/Ubuntu-Lustre-client-dkms.tgz -C "$LUSTRE_PKG_DIR"
+            
+            deb_files=()
+            mapfile -t deb_files < <(find "$LUSTRE_PKG_DIR" -type f -name "*.deb" -not -path "*/.*")
+
+            # Install all dependencies prior
+            log "Installing depencies seperately to avoid auto install of new kernel versions"
+            for pkg in "${deb_files[@]}";
+            do
+                apt-get install -y $(dpkg -I  "${pkg}" | grep "^ Depends: " | sed -E -e 's/,/ /g' -e 's/(linux-base|linux-image-oracle|linux-image-oracle-amd64|linux-image-oracle-arm64|linux-headers-oracle|linux-headers-amd64)//g' -e 's/[,\|]//g'  -e 's/ +/ /g' | cut -f2 -d:)
             done
 
-            # If there are any packages not installed
-            if [ ${#not_installed_pkgs[@]} -ne 0 ]; then
-                mkdir -p "$LUSTRE_PKG_DIR"
-                cd "$LUSTRE_PKG_DIR"
-                pwd
-                log "Downloading and installing missing packages..."
-                if ! printf '%s\n' "${not_installed_pkgs[@]}" | xargs -I{} -P8 curl -O "${LUSTRE_PACKAGES_OBJECT_STORE_URL}{}"; then
-                    log "Failed to download one or more packages."
-                    exit 1
-                fi
-
-                # Install all dependencies prior
-                log "Installing depencies seperately to avoid auto install of new kernel versions"
-                for pkg in $(ls *.deb)
-                do
-                    apt-get install -y $(dpkg -I  $pkg | grep "^ Depends: " | sed -E -e 's/,/ /g' -e 's/(linux-base|linux-image-oracle|linux-image-oracle-amd64|linux-image-oracle-arm64|linux-headers-oracle|linux-headers-amd64)//g' -e 's/[,\|]//g'  -e 's/ +/ /g' | cut -f2 -d:)
-                done
-
-                log "Now installing Lustre packages alone without dependencies"
-                if ! (apt-get update --yes && dpkg --ignore-depends=linux-image-oracle,linux-headers-oracle,linux-headers-amd64,inux-image-oracle-amd64,linux-image-oracle-arm64,linux-headers-oracle,linux-headers-amd64 -i ./*.deb && rm -f ./*.deb) then
+            log "Now installing Lustre packages alone without dependencies"
+            for pkg in "${deb_files[@]}";
+            do
+                if ! (apt-get update --yes && dpkg --ignore-depends=linux-image-oracle,linux-headers-oracle,linux-headers-amd64,inux-image-oracle-amd64,linux-image-oracle-arm64,linux-headers-oracle,linux-headers-amd64 -i "${pkg}" && rm -f "${pkg}") then
                     log "Failed to install one or more packages."
                     exit 1
                 fi
-                log "Packages installed successfully."
-            else
-                log "All required packages are already installed."
-            fi
+            done
+            log "Packages installed successfully."
             ;;
         ol)
             log "Detected Oracle Linux ..."
@@ -176,7 +162,7 @@ data:
             dnf config-manager --set-enabled ol8_codeready_builder
             dnf install -y libmount-devel
 
-            if ! (rpm -iv --nodeps --force "${rpm_files[@]}" ) then
+            if ! (dnf install -y --enablerepo ol8_developer_EPEL --enablerepo ol8_codeready_builder --nogpgcheck "${rpm_files[@]}" ) then
                 log "Failed to install one or more packages."
                 exit 1
             fi

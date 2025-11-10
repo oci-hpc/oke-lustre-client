@@ -2,13 +2,16 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: {{ include "lustre-client-installer.fullname" . }}
-  namespace: {{ .Values.namespace }}
   labels:
     {{- include "lustre-client-installer.labels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
       {{- include "lustre-client-installer.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
   template:
     metadata:
       annotations:
