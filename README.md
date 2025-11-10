@@ -153,3 +153,8 @@ Import an Ubuntu Image as a Custom Image from [here](https://github.com/oracle-q
     ```bash
     terraform destroy --auto-approve
     ```
+
+## Build your own Lustre Client
+
+1. [Instructions to build lustre-client for Ubuntu 22.04](guides/build-lustre-client-ubuntu-jammy.md)
+2. [Instructions to build lustre-client for Oracle Linux 8](guides/build-lustre-client-ol.md)

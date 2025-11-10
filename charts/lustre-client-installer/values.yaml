@@ -2,10 +2,6 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-# Namespace where the ServiceAccount, ConfigMap, and DaemonSet will be deployed.
-# ClusterRole and ClusterRoleBinding are cluster-scoped.
-namespace: kube-system
-
 # RBAC configuration
 rbac:
   create: true # Whether to create RBAC resources (ClusterRole, ClusterRoleBinding, serviceAccount)
@@ -32,9 +28,8 @@ daemonset:
     value: "true"
 
   lustreClientURLs:
-    ubuntu: https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/_2UYvgPun0hQqMMNA0COppbWF7u5TUlHOJhJ7K-5kB7QZMoOGYc3IVPTdNHttXnm/n/fsssolutions/b/rclone-1/o/ubuntu-lustre-client/
-    ol: https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/gVLaHW90Fb8H-gVzbrwfhq0omNWg2Mf1GsVqEH9RkWk2iqi0NaBb6ETqJSSfJN7S/n/idxzjcdglx2s/b/default-bucket/o/OL8-Lustre-client-dkms.tgz
-    #ol: https://objectstorage.eu-frankfurt-1.oraclecloud.com/p/YgdAE95IZFWvt39VffXXn9O8ir6JwAnqSSZCP5sAGf5UEqLS2gasO8NychBhNXUv/n/fsssolutions/b/rclone-1/o/OL8-Lustre-client-dkms.tgz 
+    ubuntu: https://objectstorage.us-ashburn-1.oraclecloud.com/p/Z3QL0MuxHN1T_De-uNjny3l1FHrg-RFPQ279Fmf1M5BeLGgeo_609WJ5UEv7pId-/n/idxzjcdglx2s/b/oke/o/lustre/Ubuntu-22.04-Lustre-client-dkms-2.15.5-ns-fix-x64.tar.gz
+    ol: https://objectstorage.us-ashburn-1.oraclecloud.com/p/rwCt_j_StXHhHN5dJiECrl2Mj5Aqnm7xyMM0aPtQYm77cIkyAt6LbYny24oUmHBv/n/idxzjcdglx2s/b/oke/o/lustre/OL8-Lustre-client-dkms-2.15.5-ns-fix-x64.tar.gz
 
   affinity:
     nodeAffinity:
